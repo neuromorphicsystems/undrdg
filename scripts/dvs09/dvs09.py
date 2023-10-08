@@ -1,6 +1,7 @@
 # Before running this script, download the original dataset from http://sensors.ini.uzh.ch/databases.html.
 # Create the directories 'input' and 'output' next to  this file.
 # Move the unzipped 'DVS09 - DVS128 sample data' directory in the 'input' directory.
+# The file  structure should be as follows.
 #
 # dvs09/
 # ├─ input/
