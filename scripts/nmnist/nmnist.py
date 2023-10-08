@@ -1,5 +1,5 @@
 # Before running this script, download the original dataset from https://www.garrickorchard.com/datasets/n-mnist.
-# Create the diretories 'input' and 'output' next to  this file.
+# Create the directories 'input' and 'output' next to  this file.
 # Move the unzipped 'Train' and 'Test' directories in the 'input' directory.
 # The file  structure should be as follows.
 #
@@ -14,7 +14,6 @@
 #
 # After compressing the dataset, run 'undr check-conformance output/nmnist'
 
-import math
 import pathlib
 
 import numpy
@@ -28,7 +27,7 @@ def read_nmnist_bin(path: pathlib.Path) -> numpy.ndarray:
     with open(path, "rb") as input:
         bytes = input.read()
     data = numpy.frombuffer(
-        bytes[: math.floor(len(bytes) / 5) * 5],
+        bytes[: (len(bytes) // 5) * 5],
         dtype=[("d0", "u1"), ("d1", "u1"), ("d2", "u1"), ("d3", "u1"), ("d4", "u1")],
     )
     events = numpy.zeros(len(data), dtype=type.dtype())
