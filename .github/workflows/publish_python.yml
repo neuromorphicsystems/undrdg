@@ -15,11 +15,10 @@ jobs:
         with:
           python-version: '3.11'
       - run: python -m build --sdist
-        working-directory: python
       - uses: actions/upload-artifact@v3
         with:
           name: dist
-          path: python/dist/*.tar.gz
+          path: dist/*.tar.gz
   upload_pypi:
     name: Upload to PyPI
     runs-on: ubuntu-latest
