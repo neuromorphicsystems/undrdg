@@ -62,7 +62,7 @@ def handle_task(task: undrdg.Task):
                 file.write(aerdat2.dvs)
         if aerdat2.aps is not None:
             with task.target_directory.create_file(
-                type=dvs_type,
+                type=aps_type,
                 name=name,
                 metadata=metadata,
             ) as file:
