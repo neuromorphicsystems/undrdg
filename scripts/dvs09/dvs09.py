@@ -25,7 +25,7 @@ matplotlib.use("agg")
 dirname = pathlib.Path(__file__).resolve().parent
 type = undrdg.DvsType(width=128, height=128)
 
-directory = undrdg.Directory(path=dirname / "output" / "dvs09")
+directory = undrdg.Directory(path=dirname / "output" / "dvs09", doi="10.5167/uzh-17620")
 
 
 @dataclasses.dataclass
@@ -132,11 +132,11 @@ for path in sorted((dirname / "input" / "DVS09 - DVS128 sample data").iterdir())
         print(path)
         properties = name_to_properties[path.name]
         if properties.format == "aerdat1":
-            aerdat1 = undrdg.parsers.read_aerdat1(path)
+            aerdat1 = undrdg.Aerdat1.read(path)
             assert aerdat1.dvs is not None
             events = aerdat1.dvs
         else:
-            aerdat2 = undrdg.parsers.read_aerdat2(path)
+            aerdat2 = undrdg.Aerdat2.read(path)
             assert aerdat2.dvs is not None
             assert aerdat2.aps is None
             assert aerdat2.imu is None

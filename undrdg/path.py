@@ -94,12 +94,14 @@ class Directory:
 
     Args:
         path (typing.Union[pathlib.Path, str]): The path of the directory in the local file system.
+        doi (typing.Optional[str]): DOI (starting with '10.') associated with the directory.
         debouncer (typing.Optional[Debouncer], optional): Delegate that saves the index to the disk to optimize frequent writes. Defaults to None.
     """
 
     def __init__(
         self,
         path: typing.Union[pathlib.Path, str],
+        doi: typing.Optional[str] = None,
         debouncer: typing.Optional["Debouncer"] = None,
     ):
         if isinstance(path, str):
@@ -108,42 +110,60 @@ class Directory:
             self.path = path
         self.path.mkdir(exist_ok=True, parents=False)
         self.index_path = self.path / "-index.json"
-        if not self.index_path.exists():
-            default_index_content = (
-                f"{json.dumps(DEFAULT_INDEX_DATA, sort_keys=True, indent=4)}\n".encode()
-            )
-            with open(self.index_path, "wb") as index_data_file:
-                index_data_file.write(default_index_content)
-        self.index_data = undr.json_index.load(self.index_path)
-        names = set()
-        for directory in self.index_data["directories"]:
-            if directory in names:
-                raise Exception(
-                    f'duplicate file or directory "{directory}" in {self.index_path}'
-                )
-            names.add(directory)
-        self.index_data["directories"].sort()
-        for file in itertools.chain(
-            self.index_data["files"], self.index_data["other_files"]
-        ):
-            if file["name"] in names:
-                raise Exception(
-                    f"duplicate file or directory \"{file['name']}\" in {self.index_path}"
-                )
-            names.add(file["name"])
-        self.index_data["files"].sort(key=operator.itemgetter("name"))
-        self.index_data["other_files"].sort(key=operator.itemgetter("name"))
-        self.added_names = set()
         self.index_update_lock = threading.Lock()
         self.index_write_lock = threading.Lock()
         self.debouncer = debouncer
-        if self.debouncer is not None:
-            self.debouncer_id = self.debouncer.register(self)
+        self.added_names = set()
+        if self.index_path.exists():
+            self.index_data = undr.json_index.load(self.index_path)
+            names = set()
+            for directory in self.index_data["directories"]:
+                if directory in names:
+                    raise Exception(
+                        f'duplicate file or directory "{directory}" in {self.index_path}'
+                    )
+                names.add(directory)
+            self.index_data["directories"].sort()
+            for file in itertools.chain(
+                self.index_data["files"], self.index_data["other_files"]
+            ):
+                if file["name"] in names:
+                    raise Exception(
+                        f"duplicate file or directory \"{file['name']}\" in {self.index_path}"
+                    )
+                names.add(file["name"])
+            self.index_data["files"].sort(key=operator.itemgetter("name"))
+            self.index_data["other_files"].sort(key=operator.itemgetter("name"))
+            if doi is None and "doi" in self.index_data:
+                del self.index_data["doi"]
+            if doi is not None:
+                self.index_data["doi"] = doi
+            if self.debouncer is not None:
+                self.debouncer_id = self.debouncer.register(self)
+                self.debouncer.set(self.debouncer_id)
+            else:
+                self.debouncer_id = 0
+                self.save_index_data(index_update_lock_already_acquired=False)
         else:
-            self.debouncer_id = 0
+            index_data = DEFAULT_INDEX_DATA.copy()
+            if doi is not None:
+                index_data["doi"] = doi
+            default_index_content = (
+                f"{json.dumps(index_data, sort_keys=True, indent=4)}\n".encode()
+            )
+            with open(self.index_path, "wb") as index_data_file:
+                index_data_file.write(default_index_content)
+            self.index_data = undr.json_index.load(self.index_path)
+            if self.debouncer is not None:
+                self.debouncer_id = self.debouncer.register(self)
+            else:
+                self.debouncer_id = 0
 
     def create_subdirectory(
-        self, name: str, debouncer: typing.Optional["Debouncer"] = None
+        self,
+        name: str,
+        doi: typing.Optional[str] = None,
+        debouncer: typing.Optional["Debouncer"] = None,
     ) -> "Directory":
         with self.index_update_lock:
             if name in self.added_names:
@@ -160,10 +180,14 @@ class Directory:
                 self.save_index_data(index_update_lock_already_acquired=True)
             else:
                 self.debouncer.set(self.debouncer_id)
-        return Directory(path=self.path / name, debouncer=debouncer)
+        return Directory(path=self.path / name, doi=doi, debouncer=debouncer)
 
     def create_file(
-        self, type: Type, name: str, metadata: dict[str, typing.Any]
+        self,
+        type: Type,
+        name: str,
+        metadata: dict[str, typing.Any],
+        doi: typing.Optional[str] = None,
     ) -> "File":
         """Adds a file to this directory.
 
@@ -182,10 +206,13 @@ class Directory:
         Returns:
             File: A writable file.
         """
-        return File(directory=self, type=type, name=name, metadata=metadata)
+        return File(directory=self, type=type, name=name, metadata=metadata, doi=doi)
 
     def create_other_file(
-        self, name: str, metadata: dict[str, typing.Any]
+        self,
+        name: str,
+        metadata: dict[str, typing.Any],
+        doi: typing.Optional[str] = None,
     ) -> "OtherFile":
         """Adds a file to this directory.
 
@@ -202,7 +229,7 @@ class Directory:
         Returns:
             OtherFile: A writable file.
         """
-        return OtherFile(directory=self, name=name, metadata=metadata)
+        return OtherFile(directory=self, name=name, metadata=metadata, doi=doi)
 
     def update_index(self, file: "BaseFile"):
         """Adds a file to the index.
@@ -353,7 +380,11 @@ class BaseFile:
     """
 
     def __init__(
-        self, directory: Directory, name: str, metadata: dict[str, typing.Any]
+        self,
+        directory: Directory,
+        name: str,
+        metadata: dict[str, typing.Any],
+        doi: typing.Optional[str],
     ):
         self._directory = directory
         self._path = self._directory.path / f"{name}.br"
@@ -376,6 +407,8 @@ class BaseFile:
             "name": name,
             "size": 0,
         }
+        if doi is not None:
+            self._index_entry["doi"] = doi
         self.uncompressed_hash_object = undr.utilities.new_hash()
         self.compressed_hash_object = undr.utilities.new_hash()
 
@@ -425,9 +458,13 @@ class File(BaseFile):
         type: Type,
         name: str,
         metadata: dict[str, typing.Any],
+        doi: typing.Optional[str],
     ):
         super().__init__(
-            directory=directory, name=f"{name}.{type.extension()}", metadata=metadata
+            directory=directory,
+            name=f"{name}.{type.extension()}",
+            metadata=metadata,
+            doi=doi,
         )
         self._index_entry["properties"] = type.properties()
         self.dtype = type.dtype()
@@ -470,9 +507,13 @@ class File(BaseFile):
 
 class OtherFile(BaseFile):
     def __init__(
-        self, directory: Directory, name: str, metadata: dict[str, typing.Any]
+        self,
+        directory: Directory,
+        name: str,
+        metadata: dict[str, typing.Any],
+        doi: typing.Optional[str],
     ) -> None:
-        super().__init__(directory=directory, name=name, metadata=metadata)
+        super().__init__(directory=directory, name=name, metadata=metadata, doi=doi)
 
     def write(self, data: typing.Union[str, bytes]):
         """Writes a string or bytes to a file.

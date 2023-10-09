@@ -69,6 +69,7 @@ def handle_task(task: undrdg.Task):
 undrdg.copy_tree(
     source=dirname / "input",
     target=dirname / "output" / "nmnist",
+    doi="10.3389/fnins.2015.00437",
     rules=[
         undrdg.SkipName(".DS_Store"),
         undrdg.Rename("Test", "test"),

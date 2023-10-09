@@ -77,6 +77,7 @@ class SkipName:
 @dataclasses.dataclass
 class Task:
     source: pathlib.Path
+    source_root: pathlib.Path
     target_directory: path.Directory
     target_name: str
     index: int
@@ -115,6 +116,7 @@ def tasks(
         else:
             yield Task(
                 source=node_source,
+                source_root=source_root,
                 target_directory=target,
                 target_name=target_name,
                 index=0,
@@ -134,13 +136,14 @@ def tasks(
 def copy_tree(
     source: pathlib.Path,
     target: pathlib.Path,
+    doi: str,
     rules: list[Rule],
     handle_task: typing.Callable[[Task], None],
     thread_pool_processes: typing.Optional[int] = None,
     pool_imap_chunksize: int = 1,
 ):
     with path.Debouncer() as debouncer:
-        target_directory = path.Directory(path=target, debouncer=debouncer)
+        target_directory = path.Directory(path=target, debouncer=debouncer, doi=doi)
         tasks_list = list(
             tasks(
                 source=source,
